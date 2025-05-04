@@ -1,19 +1,28 @@
 package cmd
 
 import (
-	"flag"
 	"fmt"
+	"marketflow/internal/adapters/exchange"
+	"marketflow/internal/app/pipeline"
+	"marketflow/internal/domain"
+	"time"
 )
 
 func Run() {
-	help := flag.Bool("help", false, "show usage")
-	port := flag.Int("port", 8080, "port number")
-	flag.Parse()
-
-	if *help {
-		fmt.Println("Usage:\n  marketflow [--port <N>]\n  marketflow --help")
-		return
+	clients := []domain.ExchangeClient{
+		exchange.NewTestGenerator("ex1"),
+		exchange.NewTestGenerator("ex2"),
 	}
 
-	fmt.Printf("Starting on :%d …\n", *port)
+	in := pipeline.FanIn(clients)
+	workerChans := pipeline.FanOut(in, 3) // 3 worker'а
+
+	for i, ch := range workerChans {
+		go func(id int, ch <-chan domain.PriceUpdate) {
+			for update := range ch {
+				fmt.Printf("[Worker %d] %s %s %.2f\n", id, update.Exchange, update.Pair, update.Price)
+			}
+		}(i, ch)
+	}
+	time.Sleep(5 * time.Second)
 }
