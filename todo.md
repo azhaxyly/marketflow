@@ -5,17 +5,17 @@
 
 Models и интерфейсы — без привязки к базе или API
 
-Описать тип PriceUpdate (exchange, pair, price, timestamp) 🟦
+Описать тип PriceUpdate (exchange, pair, price, timestamp) 🟦 ✅
 
-Описать агрегированные данные: PriceStat (avg/min/max за минуту) 🔴
+Описать агрегированные данные: PriceStat (avg/min/max за минуту) 🔴 ✅
 
 Интерфейсы:
 
-PriceRepository (InsertStat, GetLatest, GetByPeriod, etc.) 🟦
+PriceRepository (InsertStat, GetLatest, GetByPeriod, etc.) 🟦 ✅
 
-Cache (SetLatest, GetLatest) 🟦
+Cache (SetLatest, GetLatest) 🟦 ✅
 
-ExchangeClient (StartStreaming() или GetUpdates(chan PriceUpdate)) 🔴
+ExchangeClient (StartStreaming() или GetUpdates(chan PriceUpdate)) 🔴 ✅
 
 ---
 
@@ -25,7 +25,7 @@ ExchangeClient (StartStreaming() или GetUpdates(chan PriceUpdate)) 🔴
 
 Сервис агрегации по минутам (накапливает, считает avg/min/max, сбрасывает в БД) 🔴
 
-Сервис по обработке входящих PriceUpdate (fan-out → worker pool) 🟦
+Сервис по обработке входящих PriceUpdate (fan-out → worker pool) 🟦 ❓✅
 
 Сервис переключения режимов (Live/Test) 🟦
 
