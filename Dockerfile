@@ -8,6 +8,6 @@ COPY . .
 
 RUN go build -o /marketflow main.go
 
-FROM debian:stable-slim
+FROM gcr.io/distroless/base-debian12
 COPY --from=builder /marketflow /app/marketflow
 ENTRYPOINT ["/app/marketflow"]
