@@ -6,7 +6,7 @@ fmt:
 	go run mvdan.cc/gofumpt -w .
 
 build:
-	go build -o $(BINARY) ./cmd/marketflow
+	go build -o $(BINARY) .
 
 run: build
 	./$(BINARY) --help

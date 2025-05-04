@@ -33,4 +33,4 @@ jobs:
         fi
 
     - name: Build marketflow binary
-      run: go build -o marketflow ./cmd/marketflow
+      run: go build -o marketflow .
