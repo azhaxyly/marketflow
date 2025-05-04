@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: mf
+      POSTGRES_PASSWORD: mfpass
+      POSTGRES_DB: marketflow
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+    volumes: ["redisdata:/data"]
+
+  marketflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["./marketflow", "--help"]
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      MF_CONFIG: /config/config.yml   # позже
+    working_dir: /app
+
+volumes:
+  pgdata:
+  redisdata:

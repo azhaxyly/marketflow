@@ -11,7 +11,7 @@ func main() {
 	flag.Parse()
 
 	if *help {
-		flag.Usage()
+		fmt.Println("Usage:\n  marketflow [--port <N>]\n  marketflow --help")
 		return
 	}
 
