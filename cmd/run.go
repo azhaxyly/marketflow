@@ -1,21 +1,30 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"marketflow/internal/adapters/exchange"
+	"log"
+	"net/http"
+	"time"
+
+	"marketflow/internal/api"
+	"marketflow/internal/app/mode"
 	"marketflow/internal/app/pipeline"
 	"marketflow/internal/domain"
-	"time"
 )
 
 func Run() {
-	clients := []domain.ExchangeClient{
-		exchange.NewTestGenerator("ex1"),
-		exchange.NewTestGenerator("ex2"),
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	priceChan := make(chan domain.PriceUpdate, 1000)
+	manager := mode.NewManager()
+
+	if err := manager.Start(ctx, priceChan, mode.Test); err != nil {
+		log.Println(err)
 	}
 
-	in := pipeline.FanIn(clients)
-	workerChans := pipeline.FanOut(in, 3) // 3 worker'а
+	workerChans := pipeline.FanOut(priceChan, 3)
 
 	for i, ch := range workerChans {
 		go func(id int, ch <-chan domain.PriceUpdate) {
@@ -24,5 +33,14 @@ func Run() {
 			}
 		}(i, ch)
 	}
-	time.Sleep(5 * time.Second)
+
+	go func() {
+		http.HandleFunc("/mode/live", api.HandleLiveMode(manager)) 
+		http.HandleFunc("/mode/test", api.HandleTestMode(manager)) 
+		http.HandleFunc("/health", api.HealthCheckHandler)           
+		log.Fatal(http.ListenAndServe(":8080", nil))            
+	}()
+
+	// Даем серверу время на старте
+	time.Sleep(10 * time.Second)
 }

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"marketflow/internal/domain"
-
 	"github.com/go-redis/redis/v8"
+
+	"marketflow/internal/domain"
+	"marketflow/internal/logger"
 )
 
 type RedisCache struct {
@@ -17,38 +18,64 @@ type RedisCache struct {
 }
 
 func NewRedisCache(addr, password string, db int, ttl time.Duration) *RedisCache {
-	rdb := redis.NewClient(&redis.Options{
+	client := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: password,
 		DB:       db,
 	})
-	return &RedisCache{client: rdb, ttl: ttl}
+
+	cache := &RedisCache{
+		client: client,
+		ttl:    ttl,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		logger.Error("failed to ping redis: %v", err)
+	} else {
+		logger.Info("redis connection established")
+	}
+
+	return cache
 }
 
-func (r *RedisCache) SetLatest(update domain.PriceUpdate) error {
-	ctx := context.Background()
+func (r *RedisCache) SetLatest(ctx context.Context, update domain.PriceUpdate) error {
 	key := fmt.Sprintf("latest:%s:%s", update.Exchange, update.Pair)
 	data, err := json.Marshal(update)
 	if err != nil {
-		return fmt.Errorf("failed to marshal PriceUpdate: %w", err)
+		logger.Error("marshal error", "error", err)
+		return fmt.Errorf("marshal error: %w", err)
 	}
 	if err := r.client.Set(ctx, key, data, r.ttl).Err(); err != nil {
-		return fmt.Errorf("failed to set Redis key %s: %w", key, err)
+		logger.Error("redis set error", "key", key, "error", err)
+		return fmt.Errorf("redis set error for key %s: %w", key, err)
 	}
+	logger.Info("updated latest price", "key", key, "price", update.Price)
 	return nil
 }
 
-func (r *RedisCache) GetLatest(pair string) (domain.PriceUpdate, error) {
-	ctx := context.Background()
-	key := pair
+func (r *RedisCache) GetLatest(ctx context.Context, exchange, pair string) (domain.PriceUpdate, error) {
+	key := fmt.Sprintf("latest:%s:%s", exchange, pair)
 	val, err := r.client.Get(ctx, key).Result()
-	if err != nil {
-		return domain.PriceUpdate{}, fmt.Errorf("failed to get Redis key %s: %w", key, err)
+	if err == redis.Nil {
+		logger.Error("no data", "key", key)
+		return domain.PriceUpdate{}, fmt.Errorf("no data for %s", key)
 	}
-
+	if err != nil {
+		logger.Error("redis get error", "key", key, "error", err)
+		return domain.PriceUpdate{}, fmt.Errorf("redis get error for key %s: %w", key, err)
+	}
 	var update domain.PriceUpdate
 	if err := json.Unmarshal([]byte(val), &update); err != nil {
-		return domain.PriceUpdate{}, fmt.Errorf("failed to unmarshal PriceUpdate: %w", err)
+		logger.Error("unmarshal error", "error", err)
+		return domain.PriceUpdate{}, fmt.Errorf("unmarshal error: %w", err)
 	}
+	logger.Info("got latest price", "key", key, "price", update.Price)
 	return update, nil
+}
+
+func (r *RedisCache) Close() error {
+	logger.Info("closing redis cache")
+	return r.client.Close()
 }

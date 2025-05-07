@@ -11,12 +11,15 @@ func FanOut(in <-chan domain.PriceUpdate, workerCount int) []chan domain.PriceUp
 	}
 
 	go func() {
-		i := 0
-		for update := range in {
-			workerChans[i%workerCount] <- update
-			i++
-		}
-	}()
+    i := 0
+    for update := range in {
+        workerChans[i%workerCount] <- update
+        i++
+    }
+    for _, ch := range workerChans {
+        close(ch)
+    }
+}()
 
 	return workerChans
 }

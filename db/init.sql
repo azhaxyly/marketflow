@@ -8,5 +8,15 @@ CREATE TABLE IF NOT EXISTS price_aggregates (
     max_price DECIMAL(24,8) NOT NULL
 );
 
+CREATE TABLE price_stats (
+    pair_name VARCHAR(20) NOT NULL,
+    exchange VARCHAR(50) NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    average_price DOUBLE PRECISION NOT NULL,
+    min_price DOUBLE PRECISION NOT NULL,
+    max_price DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (pair_name, exchange, timestamp)
+);
+
 CREATE INDEX idx_pair_timestamp ON price_aggregates(pair_name, timestamp);
 CREATE INDEX idx_exchange_pair_timestamp ON price_aggregates(exchange, pair_name, timestamp);
