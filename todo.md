@@ -27,7 +27,7 @@ ExchangeClient (StartStreaming() или GetUpdates(chan PriceUpdate)) 🔴 ✅
 
 Сервис по обработке входящих PriceUpdate (fan-out → worker pool) 🟦 ❓✅
 
-Сервис переключения режимов (Live/Test) 🟦
+Сервис переключения режимов (Live/Test) 🟦 ✅
 
 REST-сервис: GetLatestPrice(symbol), GetMax(symbol, duration) и т.п. 🔴
 
@@ -36,13 +36,13 @@ REST-сервис: GetLatestPrice(symbol), GetMax(symbol, duration) и т.п. �
 🔌 3. Adapters
 💾 a) PostgreSQL (Storage Adapter) 🔴
 
-Реализовать PriceRepository через pgx или database/sql
+Реализовать PriceRepository через pgx или database/sql ✅
 
 Создать таблицу + миграцию для хранения агрегаций
 
-Вставка батчами
+Вставка батчами ✅
 
-Запросы min/max/avg за период
+Запросы min/max/avg за период ✅
 
 🧠 b) Redis (Cache Adapter) 🟦
 
