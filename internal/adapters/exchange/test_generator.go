@@ -1,9 +1,11 @@
 package exchange
 
 import (
-	"marketflow/internal/domain"
+	"context"
 	"math/rand"
 	"time"
+
+	"marketflow/internal/domain"
 )
 
 type TestGenerator struct {
@@ -18,7 +20,7 @@ func NewTestGenerator(exchange string) *TestGenerator {
 	}
 }
 
-func (g *TestGenerator) Start(out chan<- domain.PriceUpdate) error {
+func (g *TestGenerator) Start(ctx context.Context, out chan<- domain.PriceUpdate) error {
 	pairs := []string{"BTCUSDT", "ETHUSDT", "DOGEUSDT", "TONUSDT", "SOLUSDT"}
 
 	ticker := time.NewTicker(1 * time.Second)

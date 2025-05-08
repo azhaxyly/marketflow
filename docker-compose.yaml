@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   postgres:
     image: postgres:16
@@ -5,38 +7,78 @@ services:
       POSTGRES_USER: mf
       POSTGRES_PASSWORD: mfpass
       POSTGRES_DB: marketflow
-    ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mf"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
-    ports: ["6379:6379"]
-    volumes: ["redisdata:/data"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  exchange1:
+    image: exchange1_amd64
+    build:
+      context: ./data
+      dockerfile: Dockerfile.exchange1
+    ports:
+      - "40101:40101"
+    volumes:
+      - ./data/exchange1_amd64:/app/exchange1_amd64:ro
+
+  exchange2:
+    image: exchange2_amd64
+    build:
+      context: ./data
+      dockerfile: Dockerfile.exchange2
+    ports:
+      - "40102:40102"
+    volumes:
+      - ./data/exchange2_amd64:/app/exchange2_amd64:ro
+
+  exchange3:
+    image: exchange3_amd64
+    build:
+      context: ./data
+      dockerfile: Dockerfile.exchange3
+    ports:
+      - "40103:40103"
+    volumes:
+      - ./data/exchange3_amd64:/app/exchange3_amd64:ro
 
   marketflow:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["./marketflow", "--help"]
+    command: ["go", "run", "cmd/run.go"]
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      - exchange1
+      - exchange2
+      - exchange3
     env_file:
       - .env
-    environment:
-      - PG_HOST
-      - PG_PORT
-      - PG_USER
-      - PG_PASSWORD
-      - PG_DB
-      - PG_SSLMODE
-      - REDIS_HOST
-      - REDIS_PORT
-      - REDIS_PASSWORD
-      - EXCHANGE1_ADDR
-      - EXCHANGE2_ADDR
-      - EXCHANGE3_ADDR
+    ports:
+      - "8080:8080"
     working_dir: /app
+    volumes:
+      - .:/app
 
 volumes:
   pgdata:

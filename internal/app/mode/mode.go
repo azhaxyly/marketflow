@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"marketflow/internal/adapters/exchange"
+	"marketflow/internal/config"
 	"marketflow/internal/domain"
 	"marketflow/internal/logger"
 )
@@ -20,59 +21,60 @@ const (
 type Manager struct {
 	mu         sync.Mutex
 	mode       Mode
+	clients    []domain.ExchangeClient
 	cancelFunc context.CancelFunc
+	cfg        *config.Config
 }
 
-func NewManager() *Manager {
-	return &Manager{mode: Test} // можно по умолчанию запускать в Test
+func NewManager(cfg *config.Config) *Manager {
+	return &Manager{
+		mode: Test,
+		cfg:  cfg,
+	}
 }
 
 func (m *Manager) Start(ctx context.Context, out chan<- domain.PriceUpdate, mode Mode) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.mode == mode {
-		logger.Info("mode already started", "mode", mode)
-		return nil
-	}
-
+	// Остановить текущий режим, если активен
 	if m.cancelFunc != nil {
 		logger.Info("stopping previous mode")
 		m.cancelFunc()
+		for _, client := range m.clients {
+			client.Stop()
+		}
 	}
 
-	// Создаем новый контекст и cancel функцию
+	// Создать новый контекст
 	ctx, cancel := context.WithCancel(ctx)
 	m.cancelFunc = cancel
 	m.mode = mode
 
-	var clients []domain.ExchangeClient
+	// Инициализация клиентов
+	m.clients = nil
 	if mode == Test {
-		clients = []domain.ExchangeClient{
+		m.clients = []domain.ExchangeClient{
 			exchange.NewTestGenerator("ex1"),
 			exchange.NewTestGenerator("ex2"),
 			exchange.NewTestGenerator("ex3"),
 		}
 	} else if mode == Live {
-		clients = []domain.ExchangeClient{
-			exchange.NewTCPClient("ex1", "localhost:40101"),
-			exchange.NewTCPClient("ex2", "localhost:40102"),
-			exchange.NewTCPClient("ex3", "localhost:40103"),
+		for _, ex := range m.cfg.Exchanges {
+			m.clients = append(m.clients, exchange.NewTCPClient(ctx, ex.Name, ex.Address))
 		}
 	} else {
 		return errors.New("invalid mode")
 	}
 
-	go func() {
-		for _, c := range clients {
-			go func(client domain.ExchangeClient) {
-				err := client.Start(out)
-				if err != nil {
-					logger.Error("failed to start client", "error", err)
-				}
-			}(c)
-		}
-	}()
+	// Запуск клиентов
+	for _, client := range m.clients {
+		go func(c domain.ExchangeClient) {
+			if err := c.Start(ctx, out); err != nil {
+				logger.Error("failed to start client", "client", c, "error", err)
+			}
+		}(client)
+	}
 
 	logger.Info("started mode", "mode", mode)
 	return nil
@@ -83,8 +85,13 @@ func (m *Manager) Stop() {
 	defer m.mu.Unlock()
 
 	if m.cancelFunc != nil {
-		logger.Info("stopping mode")
+		logger.Info("stopping mode", "mode", m.mode)
 		m.cancelFunc()
+		for _, client := range m.clients {
+			client.Stop()
+		}
+		m.cancelFunc = nil
+		m.clients = nil
 	}
 }
 

@@ -29,12 +29,20 @@ func NewRedisCache(addr, password string, db int, ttl time.Duration) *RedisCache
 		ttl:    ttl,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := client.Ping(ctx).Err(); err != nil {
-		logger.Error("failed to ping redis: %v", err)
-	} else {
-		logger.Info("redis connection established")
+	// Retry для подключения
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := client.Ping(ctx).Err(); err != nil {
+			logger.Error("failed to ping redis", "attempt", i+1, "error", err)
+			if i == 2 {
+				logger.Warn("redis connection failed after retries, proceeding with fallback")
+			}
+			time.Sleep(time.Second * time.Duration(i+1))
+		} else {
+			logger.Info("redis connection established")
+			break
+		}
+		cancel()
 	}
 
 	return cache
@@ -44,12 +52,12 @@ func (r *RedisCache) SetLatest(ctx context.Context, update domain.PriceUpdate) e
 	key := fmt.Sprintf("latest:%s:%s", update.Exchange, update.Pair)
 	data, err := json.Marshal(update)
 	if err != nil {
-		logger.Error("marshal error", "error", err)
+		logger.Error("marshal error", "key", key, "error", err)
 		return fmt.Errorf("marshal error: %w", err)
 	}
 	if err := r.client.Set(ctx, key, data, r.ttl).Err(); err != nil {
-		logger.Error("redis set error", "key", key, "error", err)
-		return fmt.Errorf("redis set error for key %s: %w", key, err)
+		logger.Warn("redis set error, using fallback", "key", key, "error", err)
+		return nil // Fallback: игнорируем ошибку Redis
 	}
 	logger.Info("updated latest price", "key", key, "price", update.Price)
 	return nil
@@ -59,20 +67,37 @@ func (r *RedisCache) GetLatest(ctx context.Context, exchange, pair string) (doma
 	key := fmt.Sprintf("latest:%s:%s", exchange, pair)
 	val, err := r.client.Get(ctx, key).Result()
 	if err == redis.Nil {
-		logger.Error("no data", "key", key)
+		logger.Warn("no data in redis", "key", key)
 		return domain.PriceUpdate{}, fmt.Errorf("no data for %s", key)
 	}
 	if err != nil {
-		logger.Error("redis get error", "key", key, "error", err)
-		return domain.PriceUpdate{}, fmt.Errorf("redis get error for key %s: %w", key, err)
+		logger.Warn("redis get error, using fallback", "key", key, "error", err)
+		return domain.PriceUpdate{}, fmt.Errorf("redis unavailable: %w", err)
 	}
 	var update domain.PriceUpdate
 	if err := json.Unmarshal([]byte(val), &update); err != nil {
-		logger.Error("unmarshal error", "error", err)
+		logger.Error("unmarshal error", "key", key, "error", err)
 		return domain.PriceUpdate{}, fmt.Errorf("unmarshal error: %w", err)
 	}
 	logger.Info("got latest price", "key", key, "price", update.Price)
 	return update, nil
+}
+
+func (r *RedisCache) CleanOld(ctx context.Context, pattern string) error {
+	keys, err := r.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		logger.Warn("failed to scan keys for cleanup", "pattern", pattern, "error", err)
+		return nil // Fallback: игнорируем ошибку
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	if err := r.client.Del(ctx, keys...).Err(); err != nil {
+		logger.Warn("failed to delete old keys", "pattern", pattern, "error", err)
+		return nil // Fallback: игнорируем ошибку
+	}
+	logger.Info("cleaned old keys", "pattern", pattern, "count", len(keys))
+	return nil
 }
 
 func (r *RedisCache) Close() error {

@@ -22,6 +22,6 @@ type PriceRepository interface {
 
 // http
 type ExchangeClient interface {
-	Start(out chan<- PriceUpdate) error
+	Start(ctx context.Context, out chan<- PriceUpdate) error
 	Stop() error
 }

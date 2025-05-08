@@ -44,7 +44,7 @@ REST-сервис: GetLatestPrice(symbol), GetMax(symbol, duration) и т.п. �
 
 Запросы min/max/avg за период ✅
 
-🧠 b) Redis (Cache Adapter) 🟦
+🧠 b) Redis (Cache Adapter) 🟦✅
 
 Реализовать Cache (key: latest:EX:PAIR, value: цена+время)
 
@@ -129,4 +129,4 @@ Worker Pool: обрабатывать и класть в Redis и PostgreSQL
 
 Закрытие соединений (pg, redis, источники)
 
-Использование log/slog с уровнем Info, Error, Context
+Использование log/slog с уровнем Info, Error, Context ✅

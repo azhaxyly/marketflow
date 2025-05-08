@@ -1,32 +1,42 @@
 package aggregator
 
 import (
+	"context"
 	"time"
 
+	"marketflow/internal/adapters/redis"
 	"marketflow/internal/domain"
+	"marketflow/internal/logger"
 )
 
 type Aggregator struct {
 	Input  <-chan domain.PriceUpdate
 	Repo   domain.PriceRepository
+	Cache  *redis.RedisCache
 	Window time.Duration
 }
 
-func NewAggregator(input <-chan domain.PriceUpdate, repo domain.PriceRepository, window time.Duration) *Aggregator {
+func NewAggregator(input <-chan domain.PriceUpdate, repo domain.PriceRepository, cache *redis.RedisCache, window time.Duration) *Aggregator {
 	return &Aggregator{
 		Input:  input,
 		Repo:   repo,
+		Cache:  cache,
 		Window: window,
 	}
 }
 
-func (a *Aggregator) Start() {
+func (a *Aggregator) Start(ctx context.Context) {
 	buffer := make(map[string][]float64)
 	ticker := time.NewTicker(a.Window)
+	cleanTicker := time.NewTicker(5 * time.Minute) // Очистка каждые 5 минут
 	defer ticker.Stop()
+	defer cleanTicker.Stop()
 
 	for {
 		select {
+		case <-ctx.Done():
+			a.flush(buffer, time.Now())
+			return
 		case update, ok := <-a.Input:
 			if !ok {
 				a.flush(buffer, time.Now())
@@ -38,11 +48,17 @@ func (a *Aggregator) Start() {
 		case tickTime := <-ticker.C:
 			a.flush(buffer, tickTime)
 			buffer = make(map[string][]float64)
+
+		case <-cleanTicker.C:
+			if err := a.Cache.CleanOld(ctx, "latest:*"); err != nil {
+				logger.Error("failed to clean old redis keys", "error", err)
+			}
 		}
 	}
 }
 
 func (a *Aggregator) flush(buffer map[string][]float64, ts time.Time) {
+	var stats []domain.PriceStats
 	for key, prices := range buffer {
 		if len(prices) == 0 {
 			continue
@@ -72,11 +88,14 @@ func (a *Aggregator) flush(buffer map[string][]float64, ts time.Time) {
 			Min:       min,
 			Max:       max,
 		}
-		err := a.Repo.StoreStats(stat)
-		if err != nil {
-			// log and continue
-			// ideally use structured logger
-			println("[aggregator] failed to store stat", err.Error())
+		stats = append(stats, stat)
+	}
+
+	if len(stats) > 0 {
+		if err := a.Repo.StoreStatsBatch(stats); err != nil {
+			logger.Error("failed to store batch stats", "error", err)
+		} else {
+			logger.Info("stored batch stats", "count", len(stats))
 		}
 	}
 }
