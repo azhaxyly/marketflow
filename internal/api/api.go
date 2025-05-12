@@ -31,11 +31,113 @@ func (s *Server) Start(addr string, input chan<- domain.PriceUpdate) error {
 
 	mux.HandleFunc("/prices/latest/", s.handleLatestPrice(input))
 	mux.HandleFunc("/prices/highest/", s.handleHighestPrice)
+	mux.HandleFunc("/prices/lowest/", s.handleLowestPrice)
+	mux.HandleFunc("/prices/average/", s.handleAveragePrice)
+	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/mode/test", s.handleSetTestMode(input))
 	mux.HandleFunc("/mode/live", s.handleSetLiveMode(input))
 
 	logger.Info("starting API server", "addr", addr)
 	return http.ListenAndServe(addr, mux)
+}
+
+func (s *Server) handleLowestPrice(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "invalid URL", http.StatusBadRequest)
+		return
+	}
+	symbol := parts[3]
+	exchange := r.URL.Query().Get("exchange")
+	if exchange == "" {
+		exchange = "ex1"
+	}
+	periodStr := r.URL.Query().Get("period")
+	period, err := time.ParseDuration(periodStr)
+	if err != nil {
+		http.Error(w, "invalid period format", http.StatusBadRequest)
+		return
+	}
+
+	stats, err := s.repo.GetByPeriod(ctx, exchange, symbol, period)
+	if err != nil {
+		http.Error(w, "failed to get stats", http.StatusInternalServerError)
+		return
+	}
+
+	var minPrice float64
+	var minTime time.Time
+	for i, stat := range stats {
+		if i == 0 || stat.Min < minPrice {
+			minPrice = stat.Min
+			minTime = stat.Timestamp
+		}
+	}
+
+	if len(stats) == 0 {
+		http.Error(w, "no data for period", http.StatusNotFound)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"exchange": exchange,
+		"pair":     symbol,
+		"price":    minPrice,
+		"time":     minTime,
+	})
+}
+
+func (s *Server) handleAveragePrice(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "invalid URL", http.StatusBadRequest)
+		return
+	}
+	symbol := parts[3]
+	exchange := r.URL.Query().Get("exchange")
+	if exchange == "" {
+		exchange = "ex1"
+	}
+	periodStr := r.URL.Query().Get("period")
+	period, err := time.ParseDuration(periodStr)
+	if err != nil {
+		http.Error(w, "invalid period format", http.StatusBadRequest)
+		return
+	}
+
+	stats, err := s.repo.GetByPeriod(ctx, exchange, symbol, period)
+	if err != nil {
+		http.Error(w, "failed to get stats", http.StatusInternalServerError)
+		return
+	}
+
+	var sum float64
+	for _, stat := range stats {
+		sum += stat.Average
+	}
+	if len(stats) == 0 {
+		http.Error(w, "no data for period", http.StatusNotFound)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"exchange": exchange,
+		"pair":     symbol,
+		"price":    sum / float64(len(stats)),
+		"count":    len(stats),
+	})
 }
 
 func (s *Server) handleLatestPrice(input chan<- domain.PriceUpdate) http.HandlerFunc {
@@ -81,6 +183,26 @@ func (s *Server) handleLatestPrice(input chan<- domain.PriceUpdate) http.Handler
 			"time":     update.Time,
 		})
 	}
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	_, errRedis := s.cache.GetLatest(ctx, "ex1", "BTCUSDT")
+	_, errPg := s.repo.GetLatest(ctx, "ex1", "BTCUSDT")
+
+	status := map[string]string{
+		"redis":    "ok",
+		"postgres": "ok",
+	}
+	if errRedis != nil {
+		status["redis"] = "unavailable"
+	}
+	if errPg != nil {
+		status["postgres"] = "unavailable"
+	}
+
+	respondJSON(w, http.StatusOK, status)
 }
 
 func (s *Server) handleHighestPrice(w http.ResponseWriter, r *http.Request) {
