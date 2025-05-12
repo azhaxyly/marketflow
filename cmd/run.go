@@ -21,6 +21,13 @@ import (
 )
 
 func Run() {
+	env := os.Getenv("APP_ENV")
+	if env == "" {
+		env = "development"
+	}
+	logger.Init(env)
+
+	logger.Info("starting application", "env", env)
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
