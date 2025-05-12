@@ -29,9 +29,9 @@ func NewRedisCache(addr, password string, db int, ttl time.Duration) *RedisCache
 		ttl:    ttl,
 	}
 
-	// Retry для подключения
 	for i := 0; i < 3; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		if err := client.Ping(ctx).Err(); err != nil {
 			logger.Error("failed to ping redis", "attempt", i+1, "error", err)
 			if i == 2 {
@@ -42,7 +42,6 @@ func NewRedisCache(addr, password string, db int, ttl time.Duration) *RedisCache
 			logger.Info("redis connection established")
 			break
 		}
-		cancel()
 	}
 
 	return cache
@@ -57,7 +56,7 @@ func (r *RedisCache) SetLatest(ctx context.Context, update domain.PriceUpdate) e
 	}
 	if err := r.client.Set(ctx, key, data, r.ttl).Err(); err != nil {
 		logger.Warn("redis set error, using fallback", "key", key, "error", err)
-		return nil // Fallback: игнорируем ошибку Redis
+		return nil
 	}
 	logger.Info("updated latest price", "key", key, "price", update.Price)
 	return nil
@@ -87,14 +86,14 @@ func (r *RedisCache) CleanOld(ctx context.Context, pattern string) error {
 	keys, err := r.client.Keys(ctx, pattern).Result()
 	if err != nil {
 		logger.Warn("failed to scan keys for cleanup", "pattern", pattern, "error", err)
-		return nil // Fallback: игнорируем ошибку
+		return nil
 	}
 	if len(keys) == 0 {
 		return nil
 	}
 	if err := r.client.Del(ctx, keys...).Err(); err != nil {
 		logger.Warn("failed to delete old keys", "pattern", pattern, "error", err)
-		return nil // Fallback: игнорируем ошибку
+		return nil
 	}
 	logger.Info("cleaned old keys", "pattern", pattern, "count", len(keys))
 	return nil

@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"marketflow/internal/adapters/redis"
+	"marketflow/internal/app/mode"
 	"marketflow/internal/domain"
 	"marketflow/internal/logger"
-	"marketflow/internal/app/mode"
 )
 
 type Server struct {
@@ -29,7 +29,6 @@ func NewServer(repo domain.PriceRepository, cache *redis.RedisCache, manager *mo
 func (s *Server) Start(addr string, input chan<- domain.PriceUpdate) error {
 	mux := http.NewServeMux()
 
-	// Эндпоинты
 	mux.HandleFunc("/prices/latest/", s.handleLatestPrice(input))
 	mux.HandleFunc("/prices/highest/", s.handleHighestPrice)
 	mux.HandleFunc("/mode/test", s.handleSetTestMode(input))
@@ -60,7 +59,6 @@ func (s *Server) handleLatestPrice(input chan<- domain.PriceUpdate) http.Handler
 
 		update, err := s.cache.GetLatest(ctx, exchange, symbol)
 		if err != nil {
-			// Fallback to PostgreSQL
 			logger.Warn("cache miss, falling back to postgres", "symbol", symbol, "exchange", exchange)
 			stats, err := s.repo.GetLatest(ctx, exchange, symbol)
 			if err != nil {

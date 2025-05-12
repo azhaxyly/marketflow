@@ -37,7 +37,6 @@ func (m *Manager) Start(ctx context.Context, out chan<- domain.PriceUpdate, mode
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Остановить текущий режим, если активен
 	if m.cancelFunc != nil {
 		logger.Info("stopping previous mode")
 		m.cancelFunc()
@@ -46,12 +45,10 @@ func (m *Manager) Start(ctx context.Context, out chan<- domain.PriceUpdate, mode
 		}
 	}
 
-	// Создать новый контекст
 	ctx, cancel := context.WithCancel(ctx)
 	m.cancelFunc = cancel
 	m.mode = mode
 
-	// Инициализация клиентов
 	m.clients = nil
 	if mode == Test {
 		m.clients = []domain.ExchangeClient{
@@ -67,7 +64,6 @@ func (m *Manager) Start(ctx context.Context, out chan<- domain.PriceUpdate, mode
 		return errors.New("invalid mode")
 	}
 
-	// Запуск клиентов
 	for _, client := range m.clients {
 		go func(c domain.ExchangeClient) {
 			if err := c.Start(ctx, out); err != nil {

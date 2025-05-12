@@ -9,10 +9,10 @@ import (
 	"marketflow/internal/adapters/storage/postgres"
 	"marketflow/internal/api"
 	"marketflow/internal/app/aggregator"
+	"marketflow/internal/app/mode"
 	"marketflow/internal/config"
 	"marketflow/internal/domain"
 	"marketflow/internal/logger"
-	"marketflow/internal/app/mode" 
 )
 
 func Run() {
@@ -21,12 +21,10 @@ func Run() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	// Формирование Postgres DSN
 	pgDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.User, cfg.Postgres.Password,
 		cfg.Postgres.DBName, cfg.Postgres.SSLMode)
 
-	// Инициализация зависимостей
 	repo, err := postgres.NewPostgresRepository(pgDSN)
 	if err != nil {
 		log.Fatalf("failed to init postgres: %v", err)
@@ -41,17 +39,14 @@ func Run() {
 	manager := mode.NewManager(cfg)
 	agg := aggregator.NewAggregator(inputChan, repo, cache, cfg.AggregatorWindow)
 
-	// Запуск Aggregator
 	go agg.Start(context.Background())
 
-	// Запуск в Test Mode по умолчанию
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := manager.Start(ctx, inputChan, mode.Test); err != nil {
 		log.Fatalf("failed to start test mode: %v", err)
 	}
 
-	// Запуск API
 	apiServer := api.NewServer(repo, cache, manager)
 	go func() {
 		if err := apiServer.Start(cfg.APIAddr, inputChan); err != nil {
@@ -60,6 +55,5 @@ func Run() {
 		}
 	}()
 
-	// Блокируем основной поток
 	select {}
 }

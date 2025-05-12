@@ -85,7 +85,7 @@ func (c *LiveClient) connectAndRead(ctx context.Context, out chan<- domain.Price
 				logger.Error("failed to unmarshal price update", "exchange", c.exchange, "data", line, "error", err)
 				continue
 			}
-			update.Exchange = c.exchange // Ensure exchange field is set
+			update.Exchange = c.exchange
 
 			select {
 			case out <- update:

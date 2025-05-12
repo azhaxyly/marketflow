@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"marketflow/internal/adapters/redis"
 	"marketflow/internal/domain"
 	"marketflow/internal/logger"
 )
@@ -12,11 +11,11 @@ import (
 type Aggregator struct {
 	Input  <-chan domain.PriceUpdate
 	Repo   domain.PriceRepository
-	Cache  *redis.RedisCache
+	Cache  domain.Cache
 	Window time.Duration
 }
 
-func NewAggregator(input <-chan domain.PriceUpdate, repo domain.PriceRepository, cache *redis.RedisCache, window time.Duration) *Aggregator {
+func NewAggregator(input <-chan domain.PriceUpdate, repo domain.PriceRepository, cache domain.Cache, window time.Duration) *Aggregator {
 	return &Aggregator{
 		Input:  input,
 		Repo:   repo,
@@ -32,32 +31,43 @@ func (a *Aggregator) Start(ctx context.Context) {
 	defer ticker.Stop()
 	defer cleanTicker.Stop()
 
+	logger.Info("starting price aggregator", "window", a.Window)
+
 	for {
 		select {
 		case <-ctx.Done():
-			a.flush(buffer, time.Now())
+			a.flush(ctx, buffer, time.Now())
+			logger.Info("aggregator stopped by context")
 			return
 		case update, ok := <-a.Input:
 			if !ok {
-				a.flush(buffer, time.Now())
+				a.flush(ctx, buffer, time.Now())
+				logger.Info("aggregator channel closed, stopping")
 				return
 			}
 			key := update.Exchange + ":" + update.Pair
 			buffer[key] = append(buffer[key], update.Price)
+			logger.Debug("price added to buffer", "exchange", update.Exchange, "pair", update.Pair, "price", update.Price)
 
 		case tickTime := <-ticker.C:
-			a.flush(buffer, tickTime)
+			a.flush(ctx, buffer, tickTime)
 			buffer = make(map[string][]float64)
+			logger.Info("flushed aggregation buffer", "time", tickTime)
 
 		case <-cleanTicker.C:
-			if err := a.Cache.CleanOld(ctx, "latest:*"); err != nil {
-				logger.Error("failed to clean old redis keys", "error", err)
+			if cache, ok := a.Cache.(interface {
+				CleanOld(ctx context.Context, pattern string) error
+			}); ok {
+				if err := cache.CleanOld(ctx, "latest:*"); err != nil {
+					logger.Error("failed to clean old redis keys", "error", err)
+				}
+				logger.Info("ran cache cleanup")
 			}
 		}
 	}
 }
 
-func (a *Aggregator) flush(buffer map[string][]float64, ts time.Time) {
+func (a *Aggregator) flush(ctx context.Context, buffer map[string][]float64, ts time.Time) {
 	var stats []domain.PriceStats
 	for key, prices := range buffer {
 		if len(prices) == 0 {
@@ -89,6 +99,7 @@ func (a *Aggregator) flush(buffer map[string][]float64, ts time.Time) {
 			Max:       max,
 		}
 		stats = append(stats, stat)
+		logger.Debug("created stat", "exchange", exchange, "pair", pair, "avg", avg, "min", min, "max", max, "count", len(prices))
 	}
 
 	if len(stats) > 0 {

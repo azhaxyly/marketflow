@@ -1,8 +1,9 @@
 package pipeline
 
 import (
-	"fmt"
+	"context"
 	"marketflow/internal/domain"
+	"marketflow/internal/logger"
 )
 
 type Worker struct {
@@ -12,12 +13,12 @@ type Worker struct {
 	Output chan<- domain.PriceUpdate
 }
 
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	go func() {
 		for update := range w.Input {
-			err := w.Cache.SetLatest(update)
+			err := w.Cache.SetLatest(ctx, update)
 			if err != nil {
-				fmt.Printf("[Worker %d] Redis error: %v\n", w.ID, err)
+				logger.Error("cache error", "worker", w.ID, "error", err)
 			}
 
 			if w.Output != nil {
