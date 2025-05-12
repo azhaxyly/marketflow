@@ -2,66 +2,60 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: mf
-      POSTGRES_PASSWORD: mfpass
-      POSTGRES_DB: marketflow
+      POSTGRES_USER:     ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB:       ${PG_DB}
     ports:
-      - "5432:5432"
+      - "${PG_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mf"]
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      REDIS_DB:       "${REDIS_DB}"
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   exchange1:
-    image: exchange1_amd64
     build:
       context: ./data
       dockerfile: Dockerfile.exchange1
     ports:
       - "40101:40101"
-    volumes:
-      - ./data/exchange1_amd64:/app/exchange1_amd64:ro
 
   exchange2:
-    image: exchange2_amd64
     build:
       context: ./data
       dockerfile: Dockerfile.exchange2
     ports:
       - "40102:40102"
-    volumes:
-      - ./data/exchange2_amd64:/app/exchange2_amd64:ro
 
   exchange3:
-    image: exchange3_amd64
     build:
       context: ./data
       dockerfile: Dockerfile.exchange3
     ports:
       - "40103:40103"
-    volumes:
-      - ./data/exchange3_amd64:/app/exchange3_amd64:ro
 
   marketflow:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["go", "run", "cmd/run.go"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,9 +71,6 @@ services:
       - .env
     ports:
       - "8080:8080"
-    working_dir: /app
-    volumes:
-      - .:/app
 
 volumes:
   pgdata:

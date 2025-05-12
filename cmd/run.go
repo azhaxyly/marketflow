@@ -4,6 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"marketflow/internal/adapters/redis"
 	"marketflow/internal/adapters/storage/postgres"
@@ -48,12 +53,33 @@ func Run() {
 	}
 
 	apiServer := api.NewServer(repo, cache, manager)
+
+	srv := &http.Server{
+		Addr:    cfg.APIAddr,
+		Handler: apiServer.Router(inputChan), // создадим метод Router() чуть ниже
+	}
+
 	go func() {
-		if err := apiServer.Start(cfg.APIAddr, inputChan); err != nil {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("API server failed", "error", err)
 			log.Fatalf("API server failed: %v", err)
 		}
 	}()
 
-	select {}
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	<-stop
+	logger.Info("shutting down...")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("API shutdown error", "error", err)
+	}
+
+	cancel()
+
+	logger.Info("shutdown complete")
 }

@@ -40,7 +40,7 @@ type Exchange struct {
 func Load() (*Config, error) {
 	requiredEnv := map[string]string{
 		"PG_HOST":           os.Getenv("PG_HOST"),
-		"POSTGRES_PORT":     os.Getenv("POSTGRES_PORT"),
+		"PG_PORT":           os.Getenv("PG_PORT"),
 		"PG_USER":           os.Getenv("PG_USER"),
 		"PG_PASSWORD":       os.Getenv("PG_PASSWORD"),
 		"PG_DB":             os.Getenv("PG_DB"),
@@ -61,7 +61,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	pgPort, err := strconv.Atoi(os.Getenv("POSTGRES_PORT"))
+	pgPort, err := strconv.Atoi(os.Getenv("PG_PORT"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid PG_PORT: %w", err)
 	}
