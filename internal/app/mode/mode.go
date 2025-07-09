@@ -50,17 +50,18 @@ func (m *Manager) Start(ctx context.Context, out chan<- domain.PriceUpdate, mode
 	m.mode = mode
 
 	m.clients = nil
-	if mode == Test {
+	switch mode {
+	case Test:
 		m.clients = []domain.ExchangeClient{
 			exchange.NewTestGenerator("ex1"),
 			exchange.NewTestGenerator("ex2"),
 			exchange.NewTestGenerator("ex3"),
 		}
-	} else if mode == Live {
+	case Live:
 		for _, ex := range m.cfg.Exchanges {
 			m.clients = append(m.clients, exchange.NewTCPClient(ctx, ex.Name, ex.Address))
 		}
-	} else {
+	default:
 		return errors.New("invalid mode")
 	}
 

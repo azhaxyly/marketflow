@@ -10,7 +10,7 @@ var Log *slog.Logger
 
 func Init(env string) {
 	opts := slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: slog.LevelDebug,
 	}
 
 	var handler slog.Handler

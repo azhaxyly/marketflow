@@ -12,7 +12,7 @@ import (
 
 	"marketflow/internal/adapters/redis"
 	"marketflow/internal/adapters/storage/postgres"
-	"marketflow/internal/api"
+	"marketflow/internal/adapters/web"
 	"marketflow/internal/app/aggregator"
 	"marketflow/internal/app/mode"
 	"marketflow/internal/config"
@@ -59,7 +59,7 @@ func Run() {
 		log.Fatalf("failed to start test mode: %v", err)
 	}
 
-	apiServer := api.NewServer(repo, cache, manager)
+	apiServer := web.NewServer(repo, cache, manager)
 
 	srv := &http.Server{
 		Addr:    cfg.APIAddr,

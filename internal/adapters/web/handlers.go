@@ -1,4 +1,4 @@
-package api
+package web
 
 import (
 	"encoding/json"
@@ -24,20 +24,6 @@ func NewServer(repo domain.PriceRepository, cache *redis.RedisCache, manager *mo
 		cache:   cache,
 		manager: manager,
 	}
-}
-
-func (s *Server) Router(input chan<- domain.PriceUpdate) http.Handler {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/prices/latest/", s.handleLatestPrice(input))
-	mux.HandleFunc("/prices/highest/", s.handleHighestPrice)
-	mux.HandleFunc("/prices/lowest/", s.handleLowestPrice)
-	mux.HandleFunc("/prices/average/", s.handleAveragePrice)
-	mux.HandleFunc("/mode/test", s.handleSetTestMode(input))
-	mux.HandleFunc("/mode/live", s.handleSetLiveMode(input))
-	mux.HandleFunc("/health", s.handleHealth)
-
-	return mux
 }
 
 func (s *Server) handleLowestPrice(w http.ResponseWriter, r *http.Request) {
