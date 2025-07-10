@@ -17,5 +17,3 @@ type PriceStats struct {
 	Min       float64
 	Max       float64
 }
-
-

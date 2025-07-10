@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq" 
+	_ "github.com/lib/pq"
 
 	"marketflow/internal/domain"
 	"marketflow/internal/logger"
@@ -67,7 +67,7 @@ func (r *PostgresRepository) StoreStatsBatch(stats []domain.PriceStats) error {
 		logger.Error("failed to begin transaction", "error", err)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() 
+	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO price_stats (pair_name, exchange, timestamp, average_price, min_price, max_price)
@@ -81,10 +81,10 @@ func (r *PostgresRepository) StoreStatsBatch(stats []domain.PriceStats) error {
 	defer stmt.Close()
 
 	for i, stat := range stats {
-		_, err := stmt.ExecContext(ctx, stat.Pair, stat.Exchange, stat.Timestamp, 
+		_, err := stmt.ExecContext(ctx, stat.Pair, stat.Exchange, stat.Timestamp,
 			stat.Average, stat.Min, stat.Max)
 		if err != nil {
-			logger.Error("failed to execute batch insert", "index", i, 
+			logger.Error("failed to execute batch insert", "index", i,
 				"pair", stat.Pair, "exchange", stat.Exchange, "error", err)
 			return fmt.Errorf("failed to execute batch insert at index %d: %w", i, err)
 		}

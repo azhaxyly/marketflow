@@ -89,7 +89,7 @@ func (c *LiveClient) connectAndRead(ctx context.Context, out chan<- domain.Price
 
 			select {
 			case out <- update:
-				logger.Info("sent live price update", "exchange", c.exchange, "pair", update.Pair, "price", update.Price)
+				logger.Debug("sent live price update", "exchange", c.exchange, "pair", update.Pair, "price", update.Price)
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-c.stopCh:

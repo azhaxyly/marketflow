@@ -15,6 +15,7 @@ import (
 	"marketflow/internal/adapters/web"
 	"marketflow/internal/app/aggregator"
 	"marketflow/internal/app/mode"
+	"marketflow/internal/app/pipeline"
 	"marketflow/internal/config"
 	"marketflow/internal/domain"
 	"marketflow/internal/logger"
@@ -48,15 +49,28 @@ func Run() {
 	defer cache.Close()
 
 	inputChan := make(chan domain.PriceUpdate, 1000)
+	outputChan := make(chan domain.PriceUpdate, 1000)
+
 	manager := mode.NewManager(cfg)
-	agg := aggregator.NewAggregator(inputChan, repo, cache, cfg.AggregatorWindow)
+	agg := aggregator.NewAggregator(outputChan, repo, cache, cfg.AggregatorWindow)
 
 	go agg.Start(context.Background())
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	if err := manager.Start(ctx, inputChan, mode.Test); err != nil {
-		log.Fatalf("failed to start test mode: %v", err)
+	for i := 0; i < 5; i++ {
+		worker := &pipeline.Worker{
+			ID:     i,
+			Input:  inputChan,
+			Cache:  cache,
+			Output: outputChan,
+		}
+		worker.Start(context.Background())
+	}
+	if err := manager.Start(inputChan, mode.Test); err != nil {
+		if err.Error() == "mode already set" {
+			logger.Warn("initial mode already set, continuing")
+		} else {
+			log.Fatalf("failed to start test mode: %v", err)
+		}
 	}
 
 	apiServer := web.NewServer(repo, cache, manager)
@@ -85,8 +99,5 @@ func Run() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("API shutdown error", "error", err)
 	}
-
-	cancel()
-
 	logger.Info("shutdown complete")
 }

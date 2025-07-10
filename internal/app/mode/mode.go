@@ -33,19 +33,29 @@ func NewManager(cfg *config.Config) *Manager {
 	}
 }
 
-func (m *Manager) Start(ctx context.Context, out chan<- domain.PriceUpdate, mode Mode) error {
+func (m *Manager) Start(out chan<- domain.PriceUpdate, mode Mode) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.cancelFunc != nil {
-		logger.Info("stopping previous mode")
-		m.cancelFunc()
-		for _, client := range m.clients {
-			client.Stop()
+	if m.mode == mode {
+		logger.Warn("mode already set, restarting clients", "mode", mode)
+		if m.cancelFunc != nil {
+			m.cancelFunc()
+			for _, client := range m.clients {
+				client.Stop()
+			}
+		}
+	} else {
+		if m.cancelFunc != nil {
+			logger.Info("stopping previous mode")
+			m.cancelFunc()
+			for _, client := range m.clients {
+				client.Stop()
+			}
 		}
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFunc = cancel
 	m.mode = mode
 
@@ -90,11 +100,4 @@ func (m *Manager) Stop() {
 		m.cancelFunc = nil
 		m.clients = nil
 	}
-}
-
-func (m *Manager) Current() Mode {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	logger.Info("current mode", "mode", m.mode)
-	return m.mode
 }

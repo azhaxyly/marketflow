@@ -47,7 +47,6 @@ func (a *Aggregator) Start(ctx context.Context) {
 			}
 			key := update.Exchange + ":" + update.Pair
 			buffer[key] = append(buffer[key], update.Price)
-			logger.Debug("price added to buffer", "exchange", update.Exchange, "pair", update.Pair, "price", update.Price)
 
 		case tickTime := <-ticker.C:
 			a.flush(ctx, buffer, tickTime)

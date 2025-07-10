@@ -58,7 +58,7 @@ func (r *RedisCache) SetLatest(ctx context.Context, update domain.PriceUpdate) e
 		logger.Warn("redis set error, using fallback", "key", key, "error", err)
 		return nil
 	}
-	logger.Info("updated latest price", "key", key, "price", update.Price)
+	logger.Debug("updated latest price", "key", key, "price", update.Price)
 	return nil
 }
 

@@ -33,17 +33,27 @@ func (s *Server) handleLowestPrice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	var exchange, symbol string
+	if len(parts) == 3 {
+		// /prices/lowest/{symbol}
+		symbol = parts[2]
+		exchange = "ex1" // default
+	} else if len(parts) == 4 {
+		// /prices/lowest/{exchange}/{symbol}
+		exchange = parts[2]
+		symbol = parts[3]
+	} else {
 		http.Error(w, "invalid URL", http.StatusBadRequest)
 		return
 	}
-	symbol := parts[3]
-	exchange := r.URL.Query().Get("exchange")
-	if exchange == "" {
-		exchange = "ex1"
-	}
+
 	periodStr := r.URL.Query().Get("period")
+	if periodStr == "" {
+		periodStr = "1m"
+	}
+
 	period, err := time.ParseDuration(periodStr)
 	if err != nil {
 		http.Error(w, "invalid period format", http.StatusBadRequest)
@@ -85,17 +95,27 @@ func (s *Server) handleAveragePrice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	var exchange, symbol string
+	if len(parts) == 3 {
+		// /prices/average/{symbol}
+		symbol = parts[2]
+		exchange = "ex1" // default
+	} else if len(parts) == 4 {
+		// /prices/average/{exchange}/{symbol}
+		exchange = parts[2]
+		symbol = parts[3]
+	} else {
 		http.Error(w, "invalid URL", http.StatusBadRequest)
 		return
 	}
-	symbol := parts[3]
-	exchange := r.URL.Query().Get("exchange")
-	if exchange == "" {
-		exchange = "ex1"
-	}
+
 	periodStr := r.URL.Query().Get("period")
+	if periodStr == "" {
+		periodStr = "1m" // default to 1 minute
+	}
+
 	period, err := time.ParseDuration(periodStr)
 	if err != nil {
 		http.Error(w, "invalid period format", http.StatusBadRequest)
@@ -125,7 +145,7 @@ func (s *Server) handleAveragePrice(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleLatestPrice(input chan<- domain.PriceUpdate) http.HandlerFunc {
+func (s *Server) handleLatestPrice() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -133,15 +153,20 @@ func (s *Server) handleLatestPrice(input chan<- domain.PriceUpdate) http.Handler
 		}
 
 		ctx := r.Context()
-		parts := strings.Split(r.URL.Path, "/")
-		if len(parts) < 4 {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+		var exchange, symbol string
+		if len(parts) == 3 {
+			// /prices/latest/{symbol}
+			symbol = parts[2]
+			exchange = "ex1" // default
+		} else if len(parts) == 4 {
+			// /prices/latest/{exchange}/{symbol}
+			exchange = parts[2]
+			symbol = parts[3]
+		} else {
 			http.Error(w, "invalid URL", http.StatusBadRequest)
 			return
-		}
-		symbol := parts[3]
-		exchange := r.URL.Query().Get("exchange")
-		if exchange == "" {
-			exchange = "ex1" // Default exchange
 		}
 
 		update, err := s.cache.GetLatest(ctx, exchange, symbol)
@@ -197,18 +222,27 @@ func (s *Server) handleHighestPrice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	var exchange, symbol string
+	if len(parts) == 3 {
+		// /prices/highest/{symbol}
+		symbol = parts[2]
+		exchange = "ex1" // default
+	} else if len(parts) == 4 {
+		// /prices/highest/{exchange}/{symbol}
+		exchange = parts[2]
+		symbol = parts[3]
+	} else {
 		http.Error(w, "invalid URL", http.StatusBadRequest)
 		return
 	}
-	symbol := parts[3]
-	exchange := r.URL.Query().Get("exchange")
-	if exchange == "" {
-		exchange = "ex1" // Default exchange
-	}
 
 	periodStr := r.URL.Query().Get("period")
+	if periodStr == "" {
+		periodStr = "1m" // default to 1 minute
+	}
+
 	period, err := time.ParseDuration(periodStr)
 	if err != nil {
 		logger.Error("invalid period", "period", periodStr, "error", err)
@@ -252,7 +286,11 @@ func (s *Server) handleSetTestMode(input chan<- domain.PriceUpdate) http.Handler
 			return
 		}
 
-		if err := s.manager.Start(r.Context(), input, mode.Test); err != nil {
+		if err := s.manager.Start(input, mode.Test); err != nil {
+			if err.Error() == "mode already set" {
+				http.Error(w, "mode already set", http.StatusConflict)
+				return
+			}
 			logger.Error("failed to set test mode", "error", err)
 			http.Error(w, "failed to set test mode", http.StatusInternalServerError)
 			return
@@ -268,7 +306,11 @@ func (s *Server) handleSetLiveMode(input chan<- domain.PriceUpdate) http.Handler
 			return
 		}
 
-		if err := s.manager.Start(r.Context(), input, mode.Live); err != nil {
+		if err := s.manager.Start(input, mode.Live); err != nil {
+			if err.Error() == "mode already set" {
+				http.Error(w, "mode already set", http.StatusConflict)
+				return
+			}
 			logger.Error("failed to set live mode", "error", err)
 			http.Error(w, "failed to set live mode", http.StatusInternalServerError)
 			return
