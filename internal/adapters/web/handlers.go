@@ -141,7 +141,6 @@ func (s *Server) handleAveragePrice(w http.ResponseWriter, r *http.Request) {
 		"exchange": exchange,
 		"pair":     symbol,
 		"price":    sum / float64(len(stats)),
-		"count":    len(stats),
 	})
 }
 
